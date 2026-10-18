@@ -1,0 +1,337 @@
+--- Page 1 ---
+EfficientNet-DenseNet Network with 
+Bidirectional Cross-Attention and parallel 
+GradCAM mechanism (ED-XAGN) for Brain 
+Tumor Diagnosis in MRIs
+Introduction
+Brain tumors represent one of the most aggressive and clinically challenging 
+neurological disorders, with their early and precise diagnosis being paramount for 
+determining appropriate treatment strategies and improving patient outcomes. As the 
+primary diagnostic modality for brain tumor detection, Magnetic Resonance Imaging 
+(MRI) offers exceptional soft tissue contrast and non-invasive visualization 
+capabilities that are indispensable in clinical neurology. However, the manual 
+interpretation of MRI scans remains fraught with significant challenges that 
+compromise diagnostic reliability, including substantial inter-observer variability 
+among radiologists, the inherent subjectivity of visual assessment, and the growing 
+problem of diagnostic fatigue in high-volume clinical settings. These limitations 
+become particularly pronounced when attempting to differentiate between common 
+tumor types such as gliomas (the most aggressive primary brain tumors), 
+meningiomas (typically benign but potentially problematic tumors), and pituitary 
+tumors (which present unique diagnostic challenges due to their anatomical location). 
+Traditionally, brain tumors have been detected using imaging techniques such as 
+magnetic resonance imaging (MRI) and computer tomography (CT) scans. These 
+methods rely on the visual assessment of scans by trained radiologists to identify 
+abnormalities. However, Conventional techniques for detecting brain tumors have 
+limitations such as variability in human interpretation and the difficulty of detecting 
+subtle early signs of tumors. Due to these challenges machine learning (ML), 
+especially transfer learning (TL) has been employed in the early detection and 
+classification of brain tumors. 
+Computer-Aided Diagnosis (CAD) systems leveraging deep learning and transfer 
+learning paradigms have been deployed. Although standard Convolutional Neural 
+Networks (CNNs) demonstrate strong capabilities in local spatial feature extraction, 
+traditional architectures encounter operational limitations when applied to neuro-
+oncologic imaging:
+1. Sensitivity to Irrelevant Spatial Artifacts: Standard CNN backbones process 
+background cranial bone, soft tissue, and acquisition noise uniformly alongside 
+parenchymal pathology, degrading feature representation purity.
+2. Receptive Field and Contextual Bottlenecks: Standard localized convolutional 
+
+--- Page 2 ---
+kernels struggle to capture broad multi-scale spatial dependencies and context 
+across complex, heterogeneous tumor microenvironments.
+3. Loss of Spatial Coordinate Geometry in Feature Fusion: Naive feature fusion 
+methods collapse 2D spatial feature maps via premature Global Average Pooling 
+(GAP) prior to vector concatenation or element-wise addition, destroying 2D 
+coordinate layouts and restricting explainability.
+4. Predictive Opacity and Lack of Reliability Quantification: Conventional point-
+estimate deep classifiers do not quantify diagnostic uncertainty, offering 
+clinicians no indication of when a model prediction is ambiguous or 
+unconfident.
+Literature Survey
+Baseline Model: An attention-fused architecture for brain tumor diagnosis 
+Arash Hekmat, Zuping Zhang, Saif Ur Rehman Khan, Ifza Shad, Omair Bilal, An attention-fused 
+architecture for brain tumor diagnosis, Biomedical Signal Processing and Control, Volume 101, 
+2025, 107221, ISSN 1746-8094, https://doi.org/10.1016/j.bspc.2024.107221.
+The paper introduces a novel method, the Attention-Fused MobileNet-LSTM model, 
+which aims to improve the classification accuracy on Brain Tumor MRIs. By 
+integrating features from two well recognized pre-trained convolutional neural 
+network (CNN) models named as MobileNetV1 and MobileNetV2, the paper has 
+developed a reliable model. Their approach addresses challenges in CNN training, 
+including high processing demands, difficulty in discerning intricate details in 
+images, and diminished efficacy due to noise or irrelevant data. They employ a 
+transformer aid in feature extraction, while gamma correction before features fusion 
+tackles long-range relationship capture between successive features. The proposed 
+model employs Long Short-Term Memory (LSTM) recurrent neural networks (RNN) 
+for direct class label prediction and understanding the intermediate features from 
+feature fusion. 
+They leverage a publicly available brain tumor dataset comprising 3,000 MRI 
+images, on which they conduct augmentation procedures and standardization to meet 
+the CNN’s image resizing prerequisites, thereby enhancing dataset diversity and 
+classification task performance. With a consistent accuracy of 98.66%, their proposed 
+model showcases significant potential as a reliable tool for precise classification of 
+normal and malignant brain MRIs in the medical domain. Additionally, they employ 
+Grad-CAM to visualize the key regions prioritized by their proposed model, offering 
+insights into their decision-making processes. 
+Operational Workflow
+1. Transformer Attention Preprocessing: Raw MRI frames are passed through a 
+Vision Transformer (ViTL16) self-attention encoder to suppress non-brain 
+anatomical structures and background noise.
+
+--- Page 3 ---
+2. Photometric Luminance (Gamma) Calibration: The attention-filtered 
+representation undergoes gamma correction to calibrate contrast across dynamic 
+ranges.
+3. Dual Backbone Extraction: The contrast-calibrated image is fed simultaneously 
+into two parallel pre-trained backbones: MobileNetV1 (86 layers, 3.23 million 
+parameters) and MobileNetV2 (154 layers, 2.26 million parameters).
+4. Vector Flattening and Concatenation: Output feature maps are flattened via 
+Global Average Pooling (GAP) and merged in a 1D vector concatenation layer, 
+yielding a 2,304-dimensional vector.
+5. Recurrent Sequence Modeling: The concatenated vector is routed into a Long 
+Short-Term Memory (LSTM) recurrent network to capture inter-feature 
+sequential dependencies prior to SoftMax probability projection.
+Architectural Diagram
+Architectural Limitations
+●
+Latent Feature Opacity and Loss of Interpretability: Unrolling non-sequential 
+spatial feature vectors across artificial temporal steps in an LSTM obscures 
+feature attributions. Because the LSTM updates internal cell states (
+) and 
+hidden states ( ) through non-linear activation gates (
+), individual feature 
+contributions from MobileNetV1 versus MobileNetV2 become entangled. This 
+limits the ability of clinicians to inspect intermediate spatial maps or verify 
+prediction logic.
+●
+Architectural Redundancy and also Low Information Gain: Both MobileNetV1 
+and MobileNetV2 belong to the same lightweight architectural family, relying 
+heavily on depthwise separable convolutions and inverted residual bottleneck 
+blocks. Because their feature extraction mechanisms are structurally similar, 
+
+--- Page 4 ---
+their feature representations overlap significantly. Fusing two similar models 
+provides lower information gain compared to combining complementary, 
+functionally specialized backbones.
+●
+Premature Spatial Collapse: Applying Global Average Pooling (GAP) before 
+feature fusion flattens 7 x 7 2D spatial feature maps into 1D vectors. This 
+discards 2D spatial coordinates prior to cross-feature interaction, preventing the 
+model from performing explicit spatial query-key alignment across branches.
+●
+Absence of Predictive Uncertainty Quantification: The AFML network outputs 
+single point-estimate class probabilities. It cannot measure predictive variance 
+or clinical uncertainty, offering no mechanism to flag ambiguous scans for 
+expert radiologist review.
+Methodology
+Proposed Model: EfficientNet-DenseNet Network with Bidirectional Cross-
+Attention and parallel GradCAM mechanism (ED-XAGN)
+Rationale and Architectural Updates
+1. Backbone Replacement for Functional Specialization: We replace MobileNetV1 
+and MobileNetV2 with two complementary, structurally distinct CNN 
+backbones:
+○
+EfficientNet-B0 (Local Spatial & Texture): Utilizes compound scaling 
+(balancing depth, width, and resolution) with mobile inverted bottleneck 
+(MBConv) blocks and built-in Squeeze-and-Excitation (SE) channel 
+attention. It extracts local boundary geometry, fine tumor edge transitions, 
+micro-calcifications, and surface textures.
+○
+DenseNet-121 (Multi-Scale Semantic): Utilizes direct shortcut connections 
+where every layer receives concatenated feature maps from all preceding 
+layers. It preserves low-level, mid-level, and high-level feature maps 
+simultaneously, capturing rich multi-scale semantic abstractions and long-
+range anatomical context.
+2. Removal of LSTM: We eliminate the LSTM module entirely. Instead of treating 
+static spatial vectors as dynamic time series, feature interaction is handled by an 
+explicit, transparent Bidirectional Cross-Attention Engine that operates directly 
+on 2D spatial feature maps.
+3. Preservation of 2D Spatial Layout: Feature maps are tapped prior to Global 
+Average Pooling at their spatial resolution (7×7), maintaining 2D spatial 
+coordinates throughout cross-attention querying and gated fusion.
+4. Single-Stream Early Parallel Grad-CAM Mechanism: We eliminate the late-
+stage Grad-CAM overhead and replace it entirely with a single-stream early 
+parallel Grad-CAM head attached directly to an intermediate stage of 
+EfficientNet-B0 (14×14 resolution). This generates a high-resolution early 
+
+--- Page 5 ---
+Grad-CAM heatmap focused on local structural edge boundaries in parallel with 
+the main cross-attention pipeline.
+5. Clinical Decision Support and Predictive Uncertainty: The output stage 
+incorporates a dual-head multi-layer perceptron (MLP) containing a primary 
+classification head alongside an Uncertainty Estimation Head. Scans with high 
+predictive variance are flagged automatically for escalation.
+
+--- Page 6 ---
+Architectural Breakdown
+1: Dynamic Photometric (Gamma) Normalization
+
+--- Page 7 ---
+Raw axial MRI scans 
+ undergo rescaling to normalized floating-point 
+range [0.0, 1.0]. To standardize dynamic range shifts across differing hospital scanner 
+protocols, a non-linear gamma correction transformation is applied:
+Where A = 1.0 and  = 1.2. This transformation expands visual contrast along low-
+intensity tumor boundaries and peritumoral edema while preserving parenchymal 
+details.
+2: Parallel Specialized Feature Backbones
+The contrast-calibrated image tensor 
+ is passed simultaneously into two parallel 
+feature extractors tapped prior to Global Average Pooling (GAP):
+1. EfficientNet-B0 Stream: Outputs a 2D spatial tensor 
+. Its 
+compound scaling mechanism isolates high-frequency spatial boundaries, local 
+edge transitions, and micro-texture anomalies.
+2. DenseNet-121 Stream: Outputs a 2D spatial tensor 
+. Its dense 
+connectivity reuses feature maps from early, intermediate, and deep layers, 
+capturing multi-scale anatomical representations and spatial context.
+3: Single-Stream Parallel Grad-CAM Engine (EfficientNet-B0)
+Rather than computing Grad-CAM at the end of deep cross-attention, our architecture 
+relies exclusively on an early parallel explainability head attached directly to 
+EfficientNet-B0:
+1. Intermediate Spatial Feature Tap: An intermediate forward hook taps MBConv 
+Stage 4 of EfficientNet-B0, yielding 
+.
+2. Bottleneck Channel Reduction (1  1 Conv): Channels are compressed from 
+112 to 64: 
+3. Auxiliary Classifier Head: Global Average Pooling collapses 
+ into a 64×1 
+vector passed to a linear projection layer outputting auxiliary class predictions 
+4. Early Grad-CAM Backprop Pass: Visual explanations are generated by back-
+propagating gradients from the auxiliary class score 
+ into 
+ 
+5. Bilinear Upsampling: 
+ is upsampled from 14×14 to 224×224, 
+generating a high-resolution heatmap highlighting low-level spatial tumor 
+boundaries.
+4: Linear Projection into Shared Embedding Space
+Because 
+ has 
+ = 1280 channels and 
+ has 
+ = 1024 channels, direct cross-
+covariance dot products require channel matching. Both spatial feature maps are 
+
+--- Page 8 ---
+projected to a uniform latent channel dimension D = 512 using 1×1 pointwise 
+convolutions:
+Flattening the spatial dimensions 7×7 yields token matrices 
+, 
+where N = 49 spatial tokens.
+5: Symmetric Bidirectional Cross-Attention Engine
+Rather than using single-direction attention, both branches query each other 
+symmetrically:
+6. Branch 1: EfficientNet Queries DenseNet (
+): EfficientNet's local spatial 
+queries 
+ search DenseNet's multi-scale key space 
+ to locate where fine boundary features fit within broader 
+anatomical context: 
+ 
+and  = 64 is the projection scaling factor.
+7. Branch 2: DenseNet Queries EfficientNet (
+): DenseNet's global semantic 
+queries (
+) search EfficientNet's key space (
+) to 
+pinpoint exact micro-calcifications and edge details corresponding to 
+pathological zones: 
+ Where 
+.
+8. Spatial Reshaping: Both cross-attended token representations are reshaped back 
+into 2D spatial maps 
+.
+
+--- Page 9 ---
+6: Adaptive Spatial-Channel Gated Fusion Architecture (ASCA)
+The cross-attended feature maps from both streams are merged using a learnable 
+gating parameter 
+ [0, 1]:
+The gating network dynamically adjusts  on an image-by-image basis depending on 
+whether local boundary features or global multi-scale context are more informative 
+for a given MRI scan.
+The gated tensor 
+ then passes into the Adaptive Spatial-Channel 
+Attention (ASCA) module, which applies parallel channel and spatial recalibration:
+1. Channel Attention (Squeeze-and-Excitation): Aggregates global spatial context 
+via Global Average Pooling and passes it through a two-layer bottleneck MLP to 
+weight informative feature channels while suppressing noisy channels: 
+ Where 
+, reduction ratio r = 16,  denotes ReLU activation, and  
+denotes Sigmoid activation.
+2. Spatial Attention: Applies a 7 x 7 spatial convolution across channel-pooled 
+feature slices to construct a spatial relevance map, highlighting pathological 
+lesion tissue relative to normal brain tissue: 
+3. Composite Refinement: 
+
+--- Page 10 ---
+7: Dual Output Classifier with Predictive Uncertainty Head
+The refined tensor 
+ is processed via Global Average Pooling into a 512-
+dimensional vector 
+ and passed into a dual-head Multi-Layer Perceptron 
+(MLP):
+1. Diagnostic Classification Head: Computes diagnostic class probabilities using 
+SoftMax activation: 
+2. Predictive Uncertainty Head: Estimates model prediction variance (
+) using 
+Monte Carlo Dropout across T = 20 stochastic forward passes: 
+, the system flags the scan as High 
+Diagnostic Uncertainty, routing it for manual radiologist review.
+Dataset and Evaluation Metrics
+The chosen dataset is the Brain-Tumor-MRI-Dataset 
+(https://huggingface.co/datasets/BJyotibrat/Masoud-Nickparvar-Brain-Tumor-MRI-
+Dataset) which consists of 7,200 MRI scans. The dataset split is as follows:
+CLASS NAME AMOUNT
+NO TUMOR
+1,800
+GLIOMA
+1,800
+MENINGIOMA
+1,800
+PITUATARY
+1,800
+ 
+The evaluation metrics being considered are:
+Accuracy: 
+ 
+  
+Precision:  
+Recall: 
+  
+F1 Score: 
+  
+Hyperparameter Configurations
+
+--- Page 11 ---
+In order to implement the ED-XAGN architecture in PyTorch and Keras, the 
+following hyperparameters are specified:
+1. Input Image Resolution: Resized to 224×224×3 pixels using bilinear 
+interpolation.
+2. Optimization Algorithm: Adam optimizer with initial learning rate  = 0.0001 
+and cosine annealing decay.
+3. Loss Function: Composite Focal Loss combining primary and auxiliary losses: 
+ Where 
+ and focal scaling 
+parameter 
+.
+4. Training Schedule: batch_size = 32 with 30 training epochs.
+5. Cross-Attention Multi-Head Setting: H = 8 attention heads (
+).
+6. Auxiliary Bottleneck Channel Count: 
+ channels.
+7. Uncertainty Pass Parameters: T = 20 Monte Carlo stochastic dropout forward 
+passes with dropout rate p = 0.3.
+Conclusion
+The upgraded EfficientNet-DenseNet Network with Bidirectional Cross-Attention 
+and parallel GradCAM mechanism (ED-XAGN) directly addresses the architectural 
+limitations of the older AFML base model. By replacing MobileNetV1/V2 with 
+EfficientNet-B0 (local spatial specialist) and DenseNet-121 (multi-scale semantic 
+specialist), the network maximizes feature diversity. Removing the LSTM module in 
+favor of symmetric bidirectional cross-attention and ASCA gated fusion preserves 
+2D spatial layouts, enhances classification accuracy, and produces clear, artifact-free 
+Grad-CAM visual heatmaps. Finally, the integrated predictive uncertainty head 
+provides clinicians with a confidence metric, establishing a reliable framework for 
+brain tumor diagnosis.
+
