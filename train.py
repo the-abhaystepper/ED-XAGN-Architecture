@@ -100,7 +100,7 @@ def main():
     optimizer = Adam(model.parameters(), lr=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=2, eta_min=1e-6)
 
-    EPOCHS = 1
+    EPOCHS = 2
     lambda_aux = 0.3
 
     for epoch in range(1, EPOCHS + 1):
