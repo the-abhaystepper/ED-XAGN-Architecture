@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
+from src.utils.gamma import gamma_correction
+
 
 class BidirectionalCrossAttention(nn.Module):
 
@@ -65,20 +67,21 @@ class ASCA(nn.Module):
 class EDXAGN(nn.Module):
 
     def __init__(self, num_classes: int = 4, latent_dim: int = 512,
-                 num_heads: int = 8, mc_passes: int = 20, dropout_rate: float = 0.3):
+                 num_heads: int = 8, mc_passes: int = 20, dropout_rate: float = 0.3,
+                 gamma: float = 1.2, gamma_scale: float = 1.0):
         super().__init__()
         self.num_classes = num_classes
         self.mc_passes = mc_passes
         self.dropout_rate = dropout_rate
+        self.gamma = gamma
+        self.gamma_scale = gamma_scale
 
-        from torchvision.models import EfficientNet_B0_Weights
-        effnet = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
+        from torchvision.models import DenseNet121_Weights, EfficientNet_B0_Weights
+        effnet = models.efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1, progress=False)
         self.eff_mid = nn.Sequential(*effnet.features[:6])
         self.eff_final = nn.Sequential(*effnet.features[6:])
 
-
-        from torchvision.models import DenseNet121_Weights
-        densenet = models.densenet121(weights=DenseNet121_Weights.IMAGENET1K_V1)
+        densenet = models.densenet121(weights=DenseNet121_Weights.IMAGENET1K_V1, progress=False)
         self.dense_features = densenet.features
 
         self.proj_eff = nn.Conv2d(1280, latent_dim, 1)
@@ -125,10 +128,12 @@ class EDXAGN(nn.Module):
         return heatmap
 
     def forward(self, x: torch.Tensor, compute_uncertainty: bool = True, return_heatmap: bool = True) -> dict:
-        feat_stage4 = self.eff_mid(x)         
-        feat_final = self.eff_final(feat_stage4) 
+        x = gamma_correction(x, gamma=self.gamma, A=self.gamma_scale)
 
-        feat_dense = self.dense_features(x)   
+        feat_stage4 = self.eff_mid(x)
+        feat_final = self.eff_final(feat_stage4)
+
+        feat_dense = self.dense_features(x) 
 
         e_eff = self.proj_eff(feat_final)    
         e_dense = self.proj_dense(feat_dense) 
