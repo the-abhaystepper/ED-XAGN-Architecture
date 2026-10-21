@@ -1,7 +1,6 @@
 import time
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -104,6 +103,10 @@ def binary_roc(y_true: np.ndarray, scores: np.ndarray):
 
 
 def plot_roc(y_true: np.ndarray, y_prob: np.ndarray, class_names: list, out_path: Path) -> dict:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(7.5, 6.5))
     aucs = {}
     mean_fpr = np.linspace(0.0, 1.0, 100)
@@ -194,8 +197,12 @@ def main():
     print(f"Training samples: {len(train_loader.dataset)} ({len(train_loader)} batches)")
     print(f"Validation samples: {len(val_loader.dataset)} ({len(val_loader)} batches)")
 
-    model = EDXAGN(num_classes=len(CLASS_NAMES)).to(device)
-    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+    print("Building ED-XAGN...", flush=True)
+    model = EDXAGN(num_classes=len(CLASS_NAMES))
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}", flush=True)
+    print(f"Moving model to {device}...", flush=True)
+    model = model.to(device)
+    print("Model ready.", flush=True)
 
     optimizer = Adam(model.parameters(), lr=1e-4)
     scheduler = CosineAnnealingLR(optimizer, T_max=2, eta_min=1e-6)
@@ -231,6 +238,10 @@ def main():
     print(f"    {'macro':12s}  AUC={aucs['macro']:.4f}")
     print(f"  ROC curve saved to {roc_path}")
     print(f"Classes: {CLASS_NAMES}")
+
+    ckpt_path = Path(__file__).resolve().parent / "edxagn.pt"
+    torch.save(model.state_dict(), ckpt_path)
+    print(f"Saved weights to {ckpt_path}")
 
 
 if __name__ == "__main__":
