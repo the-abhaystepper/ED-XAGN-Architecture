@@ -4,10 +4,9 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from datasets import load_dataset
 from torchvision import transforms
 
-from data.dataset import CLASS_NAMES, DATASET_NAME, IMG_SIZE
+from data.dataset import CLASS_NAMES, DATASET_NAME, IMG_SIZE, load_figshare, slice_to_rgb
 from src.models.ed_xagn import EDXAGN
 
 DEFAULT_WEIGHTS = Path(__file__).resolve().parent / "edxagn.pt"
@@ -35,10 +34,15 @@ def load_model(weights_path: Path, device: torch.device) -> EDXAGN:
             state = torch.load(weights_path, map_location=device, weights_only=True)
         except TypeError:
             state = torch.load(weights_path, map_location=device)
-        model.load_state_dict(state)
-        print(f"Loaded weights from {weights_path}")
+        try:
+            model.load_state_dict(state)
+        except RuntimeError as exc:
+            print(f"Checkpoint at {weights_path} does not match this model ({exc}).")
+            print("Using ImageNet initialization.")
+        else:
+            print(f"Loaded weights from {weights_path}")
     else:
-        print(f"No checkpoint at {weights_path}; using ImageNet backbones and randomly initialized heads")
+        print(f"No checkpoint at {weights_path}; using ImageNet initialization")
     model.to(device)
     model.eval()
     return model
@@ -64,12 +68,14 @@ def main() -> None:
     )
     print(f"Using device: {device}")
 
-    ds = load_dataset(DATASET_NAME, split="train")
+    ds = load_figshare()
     idx = args.index if args.index is not None else random.randrange(len(ds))
     sample = ds[idx]
-    original = sample["image"].convert("RGB")
-    true_idx = int(sample["label"])
+    original = slice_to_rgb(sample["image"])
+    true_idx = int(sample["label_id"]) - 1
     true_name = CLASS_NAMES[true_idx]
+    pid = str(sample["pid"])
+    fold = int(sample["fold"])
 
     preprocess = transforms.Compose([
         transforms.Resize((IMG_SIZE, IMG_SIZE)),
@@ -85,14 +91,20 @@ def main() -> None:
     pred_idx = int(probs.argmax().item())
     pred_name = CLASS_NAMES[pred_idx]
     confidence = float(probs[pred_idx].item())
+    aux_probs = torch.softmax(out["aux_logits"][0].detach().cpu(), dim=0)
+    aux_idx = int(aux_probs.argmax().item())
+    aux_name = CLASS_NAMES[aux_idx]
     uncertainty = float(out["uncertainty"][0].detach().cpu().item())
     heatmap = out["heatmap"][0, 0].detach().cpu().numpy()
     correct = pred_idx == true_idx
 
-    print(f"\nSample index : {idx}")
+    print(f"\nDataset      : {DATASET_NAME}")
+    print(f"Sample index : {idx}")
+    print(f"Patient / fold: {pid} / {fold}")
     print(f"Actual label : {true_name} ({true_idx})")
     print(f"Predicted    : {pred_name} ({pred_idx})  p={confidence:.4f}")
-    print(f"Uncertainty  : {uncertainty:.6f}  (MC dropout variance)")
+    print(f"Early head   : {aux_name} ({aux_idx})  p={float(aux_probs[aux_idx]):.4f}")
+    print(f"Uncertainty  : {uncertainty:.6f}  (uncertainty-head MC dropout variance)")
     print(f"Match        : {'YES' if correct else 'NO'}")
     print("Class probabilities:")
     for i, name in enumerate(CLASS_NAMES):
@@ -107,17 +119,18 @@ def main() -> None:
     img_np = image.permute(1, 2, 0).numpy()
     overlay = overlay_heatmap(image, heatmap)
     verdict = "correct" if correct else "incorrect"
-    fig, axes = plt.subplots(1, 3, figsize=(11.5, 4.2))
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 4.4))
     fig.suptitle(
-        f"index={idx}  pred={pred_name} ({confidence:.2f})  "
-        f"true={true_name}  [{verdict}]  uncertainty={uncertainty:.4f}",
+        f"{DATASET_NAME}\n"
+        f"pid={pid}  fold={fold}  pred={pred_name} ({confidence:.2f})  "
+        f"true={true_name}  [{verdict}]  uncertainty={uncertainty:.6f}",
         fontsize=11,
-        y=0.98,
+        y=0.99,
     )
 
     panels = [
-        ("Original", img_np, None),
-        ("Grad-CAM", heatmap, "jet"),
+        ("Max-scaled slice", img_np, None),
+        (f"Early Grad-CAM ({aux_name})", heatmap, "jet"),
         ("Overlay", overlay, None),
     ]
     for ax, (title, data, cmap) in zip(axes, panels):
